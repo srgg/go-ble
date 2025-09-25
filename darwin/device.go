@@ -140,13 +140,14 @@ func (d *Device) Scan(ctx context.Context, allowDup bool, h ble.AdvHandler) erro
 	}()
 
 	// Respond to requests from the delegate for a channel to provide
-	// advertisements on.  For each such request, use wg.Add to track that
-	// there's an advertisement now in progress that we need to wait for.
+	// advertisements on.  We no longer call wg.Add here —
+	// each advertisement is delivered by DidDiscoverPeripheral,
+	// and the processing goroutine handles wg.Done.
 loop:
 	for {
 		select {
 		case advCh <- ch:
-			wg.Add(1)
+			// nothing to do
 		case <-ctx.Done():
 			break loop
 		}

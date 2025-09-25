@@ -18,17 +18,33 @@ func (d *Device) DidDiscoverPeripheral(cmgr cbgo.CentralManager, prph cbgo.Perip
 	advFields cbgo.AdvFields, rssi int) {
 
 	// The Scan operation is happening in another goroutine. If a scan is still in progress,
-	// a chan receive operation on d.advCh will give us a guaranteed-good channel on which
-	// we can report this result. If the Scan operation is over, this channel will be closed
-	// and we can return early.
+	// a channel receive operation on d.advCh will give us a valid channel on which
+	// we can report this advertisement. If the Scan operation is over or no scan is active,
+	// d.advCh may be nil or closed, and we can return early.
 	d.connLock.Lock()
 	advCh := d.advCh
 	d.connLock.Unlock()
-	ch := <-advCh
+
+	if advCh == nil {
+		return
+	}
+
+	// Receive the actual advertisement channel from advCh.
+	// If no scan is in progress, return early.
+	var ch chan<- ble.Advertisement
+	select {
+	case ch = <-advCh:
+		// got the channel, continue
+	default:
+		// no scan is currently waiting
+		return
+	}
+
 	if ch == nil {
 		return
 	}
 
+	// Build the advertisement struct.
 	a := &adv{
 		localName: advFields.LocalName,
 		rssi:      int(rssi),
@@ -51,7 +67,14 @@ func (d *Device) DidDiscoverPeripheral(cmgr cbgo.CentralManager, prph cbgo.Perip
 	}
 	a.peerUUID = ble.UUID(prph.Identifier())
 
-	ch <- a
+	// Send the advertisement into the scan channel safely.
+	// If the channel is closed or not ready, the select default prevents panic.
+	select {
+	case ch <- a:
+		// delivered
+	default:
+		// scan channel closed or not ready, drop safely
+	}
 }
 
 func (d *Device) DidConnectPeripheral(cmgr cbgo.CentralManager, prph cbgo.Peripheral) {

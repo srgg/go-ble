@@ -29,7 +29,7 @@ type Device struct {
 	connLock sync.Mutex
 
 	// Mediates interactions between Scan and DidDiscoverPeripheral
-	advCh <-chan chan<- ble.Advertisement
+	advChSingle chan ble.Advertisement
 }
 
 // NewDevice returns a BLE device.
@@ -96,23 +96,14 @@ func (d *Device) Scan(ctx context.Context, allowDup bool, h ble.AdvHandler) erro
 	// Because the OS delivers results to the delegate
 	// DidDiscoverPeripheral concurrently, we need a way to handle
 	// events when a Scan is in progress, and safely discard them
-	// when a Scan operation is concluded.	The way we do that is
-	// with channels.
+	// when a Scan operation is concluded. The way we do that is
+	// with a single advertisement channel.
 
-	// ch is the channel that will be provided to the delegate to
-	// return advertisements on, and what we'll listen to below to
-	// process them.
 	ch := make(chan ble.Advertisement)
 
-	// d.advCh is how we get ch delivered to the delegate. It should
-	// never be nil while a delegate has the potential to receive
-	// an advertisement.  We will close it when the Scan operation
-	// is completed, at which point any messages arriving at the
-	// delegate will receive nil from this channel, allowing the
-	// message to be discarded.
-	advCh := make(chan chan<- ble.Advertisement)
+	// d.advChSingle is the single channel that DidDiscoverPeripheral will use
 	d.connLock.Lock()
-	d.advCh = advCh
+	d.advChSingle = ch
 	d.connLock.Unlock()
 
 	// Start scanning, and stop scanning when the context expires.
@@ -124,38 +115,29 @@ func (d *Device) Scan(ctx context.Context, allowDup bool, h ble.AdvHandler) erro
 		d.cm.StopScan()
 	}()
 
-	// We use this WaitGroup to keep track of any advertisements that still
-	// need to be returned.  It starts with a value of 1 to avoid a race
-	// where the goroutine potentially calls wg.Done before wg.Add gets
-	// called.  There should be at most one of these situations concurrently.
+	// Use a WaitGroup to track all advertisements that are actually received
 	var wg sync.WaitGroup
-	wg.Add(1)
 
-	// Begin processing responses from ch (events received by DidDiscoverPeripheral).
+	// Begin processing responses from ch (events received by DidDiscoverPeripheral)
 	go func() {
-		for r := range ch {
-			h(r)
-			wg.Done()
+		for ad := range ch {
+			wg.Add(1) // Add for each advertisement we will process
+			h(ad)
+			wg.Done() // Done after processing
 		}
 	}()
 
-	// Respond to requests from the delegate for a channel to provide
-	// advertisements on.  For each such request, use wg.Add to track that
-	// there's an advertisement now in progress that we need to wait for.
-loop:
-	for {
-		select {
-		case advCh <- ch:
-			wg.Add(1)
-		case <-ctx.Done():
-			break loop
-		}
-	}
+	// Wait for context cancellation
+	<-ctx.Done()
 
-	close(advCh) // context is expired, so signal DidDiscoverPeripheral to start discarding results
-	wg.Done()    // for our wg.Add(1) at the top
-	wg.Wait()    // wait until all pending delegate calls have returned their results
-	close(ch)    // let the goroutine processing results above terminate
+	// Signal DidDiscoverPeripheral to stop sending
+	d.connLock.Lock()
+	close(d.advChSingle)
+	d.advChSingle = nil
+	d.connLock.Unlock()
+
+	// Wait until all pending advertisements have been processed
+	wg.Wait()
 
 	return ctx.Err()
 }

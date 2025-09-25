@@ -14,21 +14,21 @@ func (d *Device) CentralManagerDidUpdateState(cmgr cbgo.CentralManager) {
 	d.evl.stateChanged.RxSignal(struct{}{})
 }
 
+// DidDiscoverPeripheral is called by the OS delegate when a peripheral is discovered
 func (d *Device) DidDiscoverPeripheral(cmgr cbgo.CentralManager, prph cbgo.Peripheral,
 	advFields cbgo.AdvFields, rssi int) {
 
 	// The Scan operation is happening in another goroutine. If a scan is still in progress,
-	// a chan receive operation on d.advCh will give us a guaranteed-good channel on which
-	// we can report this result. If the Scan operation is over, this channel will be closed
-	// and we can return early.
+	// d.advChSingle gives us a guaranteed-good channel on which we can report this result.
+	// If the Scan operation is over, this channel will be nil and we can return early.
 	d.connLock.Lock()
-	advCh := d.advCh
+	ch := d.advChSingle
 	d.connLock.Unlock()
-	ch := <-advCh
 	if ch == nil {
 		return
 	}
 
+	// Prepare advertisement struct
 	a := &adv{
 		localName: advFields.LocalName,
 		rssi:      int(rssi),
@@ -51,7 +51,11 @@ func (d *Device) DidDiscoverPeripheral(cmgr cbgo.CentralManager, prph cbgo.Perip
 	}
 	a.peerUUID = ble.UUID(prph.Identifier())
 
-	ch <- a
+	// Non-blocking send: if the scan channel is closed, drop this advertisement
+	select {
+	case ch <- a:
+	default:
+	}
 }
 
 func (d *Device) DidConnectPeripheral(cmgr cbgo.CentralManager, prph cbgo.Peripheral) {

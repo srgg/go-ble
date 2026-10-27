@@ -361,6 +361,12 @@ func (cln *Client) Unsubscribe(c *ble.Characteristic, ind bool) error {
 		return err
 	}
 
+	// Nothing to stop: no request, so no wait on a notification-state callback.
+	if !cbchr.IsNotifying() {
+		cln.conn.delSub(c)
+		return nil
+	}
+
 	ch := cln.conn.evl.notifyChanged.Listen()
 	defer cln.conn.evl.notifyChanged.Close()
 
@@ -414,6 +420,17 @@ type sub struct {
 
 func (cln *Client) DidDiscoverServices(prph cbgo.Peripheral, err error) {
 	cln.conn.evl.svcsDiscovered.RxSignal(err)
+}
+
+// DidModifyServices drops the services a Service Changed indication
+// invalidated: a request on their objects gets no callback, so it would wait
+// until disconnect.
+func (cln *Client) DidModifyServices(prph cbgo.Peripheral, invSvcs []cbgo.Service) {
+	for _, cbs := range invSvcs {
+		for _, c := range cln.pc.delSvc(cbs) {
+			cln.conn.delSub(c)
+		}
+	}
 }
 func (cln *Client) DidDiscoverCharacteristics(prph cbgo.Peripheral, svc cbgo.Service, err error) {
 	cln.conn.evl.chrsDiscovered.RxSignal(err)

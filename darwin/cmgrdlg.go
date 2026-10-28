@@ -6,7 +6,7 @@
 package darwin
 
 import (
-	"github.com/JuulLabs-OSS/cbgo"
+	"github.com/tinygo-org/cbgo"
 	"github.com/go-ble/ble"
 )
 
@@ -41,11 +41,11 @@ func (d *Device) DidDiscoverPeripheral(cmgr cbgo.CentralManager, prph cbgo.Perip
 		a.powerLevel = *advFields.TxPowerLevel
 	}
 	for _, u := range advFields.ServiceUUIDs {
-		a.svcUUIDs = append(a.svcUUIDs, ble.UUID(u))
+		a.svcUUIDs = append(a.svcUUIDs, bleUUID(u))
 	}
 	for _, sd := range advFields.ServiceData {
 		a.svcData = append(a.svcData, ble.ServiceData{
-			UUID: ble.UUID(sd.UUID),
+			UUID: bleUUID(sd.UUID),
 			Data: sd.Data,
 		})
 	}

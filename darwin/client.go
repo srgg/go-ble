@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/JuulLabs-OSS/cbgo"
+	"github.com/tinygo-org/cbgo"
 	"github.com/go-ble/ble"
 )
 
@@ -121,7 +121,7 @@ func (cln *Client) DiscoverServices(ss []ble.UUID) ([]*ble.Service, error) {
 	svcs := []*ble.Service{}
 	for _, dsvc := range cln.conn.prph.Services() {
 		svc := &ble.Service{
-			UUID: ble.UUID(dsvc.UUID()),
+			UUID: bleUUID(dsvc.UUID()),
 		}
 		cln.pc.addSvc(svc, dsvc)
 		svcs = append(svcs, svc)
@@ -168,7 +168,7 @@ func (cln *Client) DiscoverCharacteristics(cs []ble.UUID, s *ble.Service) ([]*bl
 
 	for _, dchr := range cbsvc.Characteristics() {
 		chr := &ble.Characteristic{
-			UUID:     ble.UUID(dchr.UUID()),
+			UUID:     bleUUID(dchr.UUID()),
 			Property: ble.Property(dchr.Properties()),
 		}
 		cln.pc.addChr(chr, dchr)
@@ -207,7 +207,7 @@ func (cln *Client) DiscoverDescriptors(ds []ble.UUID, c *ble.Characteristic) ([]
 
 	for _, ddsc := range cbchr.Descriptors() {
 		dsc := &ble.Descriptor{
-			UUID: ble.UUID(ddsc.UUID()),
+			UUID: bleUUID(ddsc.UUID()),
 		}
 		c.Descriptors = append(c.Descriptors, dsc)
 		cln.pc.addDsc(dsc, ddsc)
@@ -547,7 +547,7 @@ func (cln *Client) rebindPass() {
 		if _, err := cln.pc.findCbSvc(s); err == nil {
 			continue
 		}
-		k := nthWithUUID(len(cbsvcs), func(j int) ble.UUID { return ble.UUID(cbsvcs[j].UUID()) }, s.UUID, occurrence(svcUUIDs, i))
+		k := nthWithUUID(len(cbsvcs), func(j int) ble.UUID { return bleUUID(cbsvcs[j].UUID()) }, s.UUID, occurrence(svcUUIDs, i))
 		if k < 0 {
 			continue // still hidden
 		}
@@ -563,7 +563,7 @@ func (cln *Client) rebindPass() {
 			chrUUIDs[j] = c.UUID
 		}
 		for j, c := range s.Characteristics {
-			k := nthWithUUID(len(cbcs), func(m int) ble.UUID { return ble.UUID(cbcs[m].UUID()) }, c.UUID, occurrence(chrUUIDs, j))
+			k := nthWithUUID(len(cbcs), func(m int) ble.UUID { return bleUUID(cbcs[m].UUID()) }, c.UUID, occurrence(chrUUIDs, j))
 			if k < 0 {
 				continue
 			}
@@ -589,19 +589,19 @@ func (cln *Client) rebindPass() {
 		if _, err := cln.pc.findSvc(cbs); err == nil {
 			continue
 		}
-		s := &ble.Service{UUID: ble.UUID(cbs.UUID())}
+		s := &ble.Service{UUID: bleUUID(cbs.UUID())}
 		cln.pc.addSvc(s, cbs)
 		if cln.await(&cln.conn.evl.chrsDiscovered, func() { cln.conn.prph.DiscoverCharacteristics(nil, cbs) }) != nil {
 			return
 		}
 		for _, cbc := range cbs.Characteristics() {
-			c := &ble.Characteristic{UUID: ble.UUID(cbc.UUID()), Property: ble.Property(cbc.Properties())}
+			c := &ble.Characteristic{UUID: bleUUID(cbc.UUID()), Property: ble.Property(cbc.Properties())}
 			cln.pc.addChr(c, cbc)
 			if cln.await(&cln.conn.evl.dscsDiscovered, func() { cln.conn.prph.DiscoverDescriptors(cbc) }) != nil {
 				return
 			}
 			for _, cbd := range cbc.Descriptors() {
-				d := &ble.Descriptor{UUID: ble.UUID(cbd.UUID())}
+				d := &ble.Descriptor{UUID: bleUUID(cbd.UUID())}
 				cln.pc.addDsc(d, cbd)
 				c.Descriptors = append(c.Descriptors, d)
 			}
@@ -623,7 +623,7 @@ func (cln *Client) rebindPass() {
 			dscUUIDs[m] = d.UUID
 		}
 		for m, d := range p.c.Descriptors {
-			if k := nthWithUUID(len(cbds), func(n int) ble.UUID { return ble.UUID(cbds[n].UUID()) }, d.UUID, occurrence(dscUUIDs, m)); k >= 0 {
+			if k := nthWithUUID(len(cbds), func(n int) ble.UUID { return bleUUID(cbds[n].UUID()) }, d.UUID, occurrence(dscUUIDs, m)); k >= 0 {
 				cln.pc.addDsc(d, cbds[k])
 			}
 		}

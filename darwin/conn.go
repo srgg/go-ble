@@ -6,7 +6,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/JuulLabs-OSS/cbgo"
+	"github.com/tinygo-org/cbgo"
 	"github.com/go-ble/ble"
 )
 
@@ -166,7 +166,8 @@ func (c *conn) processChrRead(err error, cbchr cbgo.Characteristic) {
 	c.RLock()
 	defer c.RUnlock()
 
-	uuidStr := uuidStrWithDashes(cbchr.UUID().String())
+	// Keyed as addChrReader and addSub key it, from the go-ble UUID.
+	uuidStr := uuidStrWithDashes(bleUUID(cbchr.UUID()).String())
 	found := false
 
 	ch := c.chrReads[uuidStr]

@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/go-ble/ble"
-	"github.com/JuulLabs-OSS/cbgo"
+	"github.com/tinygo-org/cbgo"
 )
 
 type profCache struct {
